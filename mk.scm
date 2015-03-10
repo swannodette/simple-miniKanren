@@ -180,7 +180,7 @@
         ((f) (take n f))
         ((a) (cdr a))
         ((a f)
-         (cons a
+         (cons (cadr a)
            (take (and n (- n 1)) f)))))))
 
 (define ==
