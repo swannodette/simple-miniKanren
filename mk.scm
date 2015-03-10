@@ -21,9 +21,17 @@
   (syntax-rules ()
     ((_ x) (car x))))
 
-(define-syntax size-s
-  (syntax-rules ()
-    ((_ x) (length x))))
+(define size-s
+  (lambda (SS)
+    (letrec
+      ((size-s^
+        (lambda (SS acc)
+          (cond
+            ((eq? SS '()) acc)
+            (else
+              (size-s^ (cdr SS)
+                       (+ acc (length (car SS)))))))))
+      (size-s^ SS 0))))
 
 (define-syntax var
   (syntax-rules ()
@@ -33,18 +41,36 @@
   (syntax-rules ()
     ((_ x) (vector? x))))
 
+(define result (vector))
+
 (define empty-s '())
 
-(define walk
+(define walk1
   (lambda (u S)
     (cond
       ((and (var? u) (assq u S)) =>
-       (lambda (pr) (walk (rhs pr) S)))
-      (else u))))
+       (lambda (pr) (walk1 (rhs pr) S)))
+      (else `(,u)))))
+
+(define walk
+  (lambda (u SS)
+    (cond
+      ((eq? SS '()) u)
+      ((walk1 u (car SS)) =>
+       (lambda (l)
+         (let ((v (car l))) 
+           (cond
+             ((eq? u v) (walk u (cdr SS)))
+             (else v))))))))
 
 (define ext-s
-  (lambda (x v s)
-    (cons `(,x . ,v) s)))
+  (lambda (x v SS)
+    (cond
+      ((eq? SS '()) `(((,x . ,v))))
+      (else
+        (let ((S (car SS))
+              (SS^ (cdr SS)))
+          (cons (cons `(,x . ,v) S) SS^))))))
 
 (define unify
   (lambda (u v s)
@@ -142,7 +168,7 @@
        (lambdaf@ ()
          ((fresh (x) g0 g ... 
             (lambdag@ (s)
-              (cons (reify x s) '())))
+              (cons result (cons (reify x s) '()))))
           empty-s))))))
  
 (define take
@@ -152,9 +178,9 @@
       (case-inf (f)
         (() '())
         ((f) (take n f))
-        ((a) a)
+        ((a) (cdr a))
         ((a f)
-         (cons (car a)
+         (cons a
            (take (and n (- n 1)) f)))))))
 
 (define ==
@@ -165,10 +191,17 @@
 (define-syntax fresh
   (syntax-rules ()
     ((_ (x ...) g0 g ...)
-     (lambdag@ (s)
-       (inc
-         (let ((x (var 'x)) ...)
-           (bind* (g0 s) g ...)))))))
+     (lambdag@ (SS)
+       (let ((SS^ (cons '() SS)))
+         (inc
+           (let ((x (var 'x)) ...)
+             (let ((SS^^ (bind* (g0 SS^) g ...)))
+               (cond
+                 ((pair? SS^^)
+                  (cond
+                    ((eq? (car SS^^) result) SS^^)
+                    (else (cdr SS^^))))
+                 (else SS^^))))))))))
  
 (define-syntax bind*
   (syntax-rules ()
